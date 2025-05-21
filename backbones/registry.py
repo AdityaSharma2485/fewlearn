@@ -68,10 +68,14 @@ def _register_torchvision_models():
             model.fc = nn.Flatten()
             return model
         
-        def resnet50(pretrained=True):
-            weights = models.ResNet50_Weights.IMAGENET1K_V1 if pretrained else None
-            model = models.resnet50(weights=weights)
+        # Replace resnet50 with inception_v3
+        def inception_v3(pretrained=True):
+            weights = models.Inception_V3_Weights.IMAGENET1K_V1 if pretrained else None
+            model = models.inception_v3(weights=weights, transform_input=True)
+            # Replace the final classification layer with an identity
             model.fc = nn.Flatten()
+            # Remove auxiliary classifier
+            model.AuxLogits = None
             return model
         
         # MobileNet
@@ -119,7 +123,7 @@ def _register_torchvision_models():
         
         # Register all models
         register_backbone("resnet18", resnet18)
-        register_backbone("resnet50", resnet50)
+        register_backbone("inception_v3", inception_v3)
         register_backbone("mobilenet_v2", mobilenet_v2)
         register_backbone("efficientnet_b0", efficientnet_b0)
         register_backbone("densenet121", densenet121)
