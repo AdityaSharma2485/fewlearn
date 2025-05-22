@@ -58,8 +58,5 @@ venv.bak/
 .DS_Store
 Thumbs.db
 
-# License file (added manually from Git repo)
-LICENSE.txt
-
 # Data directory (contains downloaded datasets)
 data/ 
