@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fewlearn"
+description = "A Python module for few-shot learning with pretrained models"
+readme = "README.md"
+requires-python = ">=3.7"
+license = {file = "LICENSE.txt"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Development Status :: 4 - Beta",
+]
+dynamic = ["version"]
+
+[tool.setuptools]
+packages = ["fewlearn"]
+
+[project.urls]
+"Homepage" = "https://github.com/AdityaSharma2485/fewlearn"
+"Bug Tracker" = "https://github.com/AdityaSharma2485/fewlearn/issues" 

@@ -129,3 +129,71 @@ fig = plot_prototype_embeddings(
 fig.savefig("embeddings.png")
 ```
 
+## Development
+
+### Setting Up Development Environment
+
+```bash
+# Clone the repository
+git clone https://github.com/AdityaSharma2485/fewlearn.git
+cd fewlearn
+
+# Install development dependencies
+pip install -e ".[dev]"
+```
+
+### Running Tests
+
+FewLearn comes with a suite of unit tests to ensure the functionality works as expected:
+
+```bash
+# Run all tests
+pytest tests/
+
+# Run specific test modules
+pytest tests/test_minds.py
+pytest tests/test_prototypical.py
+```
+
+## Demo Application
+
+A Streamlit-based demo application is available in the `demoapp.py` file. To run it:
+
+```bash
+# Install demo dependencies
+pip install -e ".[demo]"
+
+# Run the demo app
+streamlit run demoapp.py
+```
+
+The demo allows you to:
+- Compare different backbone models
+- Test on the Omniglot dataset
+- Upload and test your own custom datasets
+- Visualize model performance and predictions
+
+## Contributing
+
+Contributions to FewLearn are welcome! To contribute:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Run tests to ensure they pass (`pytest tests/`)
+5. Commit your changes (`git commit -m 'Add amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
+
+Please ensure your code follows the project's style guidelines and includes appropriate tests.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgements
+
+- PyTorch team for the excellent deep learning framework
+- Authors of the paper "Prototypical Networks for Few-shot Learning" for the foundational algorithm
+- Contributors and users of the FewLearn library
+

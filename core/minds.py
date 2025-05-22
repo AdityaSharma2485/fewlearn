@@ -11,10 +11,20 @@ from typing import Dict, List, Union, Optional, Tuple, Any, Callable
 import os
 from torchvision import datasets, transforms
 from torch.utils.data import Dataset
+from pathlib import Path
+from PIL import Image
 
-from fewlearn.core.protocols import EvaluationProtocol
-from fewlearn.models.base import FewShotModel
-from fewlearn.evaluation.metrics import calculate_metrics
+# Try both local and installed package imports
+try:
+    # Try local imports first
+    from core.protocols import EvaluationProtocol
+    from models.base import FewShotModel
+    from evaluation.metrics import calculate_metrics
+except ImportError:
+    # Fall back to absolute imports when installed as a package
+    from fewlearn.core.protocols import EvaluationProtocol
+    from fewlearn.models.base import FewShotModel
+    from fewlearn.evaluation.metrics import calculate_metrics
 
 
 class MINDS:
@@ -34,9 +44,29 @@ class MINDS:
     
     def __init__(self):
         """Initialize a new MINDS framework instance."""
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        # Try to use GPU but with fallback mechanism
+        try:
+            if torch.cuda.is_available():
+                # Check available GPU memory
+                total_mem = torch.cuda.get_device_properties(0).total_memory
+                reserved_mem = torch.cuda.memory_reserved(0)
+                if reserved_mem / total_mem > 0.8:  # If more than 80% is reserved
+                    print("Warning: GPU memory usage is high. Using CPU instead.")
+                    self.device = torch.device('cpu')
+                else:
+                    self.device = torch.device('cuda')
+                    print(f"Using GPU: {torch.cuda.get_device_name(0)}")
+            else:
+                self.device = torch.device('cpu')
+                print("Using CPU: CUDA not available")
+        except Exception as e:
+            print(f"Error initializing CUDA: {e}. Falling back to CPU.")
+            self.device = torch.device('cpu')
+        
+        # Set default device memory limit flag
+        self.use_cpu_fallback = True
         self.models = {}
-        print("MINDS framework initialized successfully")
+        print(f"MINDS framework initialized successfully on {self.device}")
     
     def add_model(self, name: str, model: FewShotModel) -> None:
         """
@@ -49,8 +79,26 @@ class MINDS:
         if name in self.models:
             print(f"Warning: Overwriting existing model '{name}'")
         
-        self.models[name] = model.to(self.device)
-        print(f"Added model '{name}' successfully")
+        try:
+            # Try to move model to the specified device
+            self.models[name] = model.to(self.device)
+        except RuntimeError as e:
+            # Handle CUDA out-of-memory errors
+            if "CUDA out of memory" in str(e) and self.use_cpu_fallback:
+                print(f"\nWarning: CUDA out of memory when loading model '{name}'. Falling back to CPU.")
+                # Set device to CPU for all future operations
+                self.device = torch.device('cpu')
+                # Move model to CPU instead
+                self.models[name] = model.to(self.device)
+                # Also move any previously loaded models to CPU
+                for model_name, loaded_model in self.models.items():
+                    if model_name != name:  # Skip the model we just added
+                        self.models[model_name] = loaded_model.to(self.device)
+            else:
+                # Re-raise other errors
+                raise
+            
+        print(f"Added model '{name}' successfully on {self.device}")
     
     def remove_model(self, name: str) -> None:
         """
@@ -116,7 +164,12 @@ class MINDS:
         Returns:
             Dataset object
         """
-        if not os.path.exists(dataset_path):
+        from pathlib import Path
+        
+        # Convert to Path object for better path handling
+        dataset_path = Path(dataset_path)
+        
+        if not dataset_path.exists():
             raise FileNotFoundError(f"Dataset path not found: {dataset_path}")
         
         # Define transformations
@@ -129,18 +182,79 @@ class MINDS:
             )
         ])
         
-        # Load dataset using ImageFolder
-        dataset = datasets.ImageFolder(
-            root=dataset_path,
-            transform=transform
-        )
-        
-        print(f"Loaded custom dataset from {dataset_path}: {len(dataset)} images, {len(dataset.classes)} classes")
-        
-        # Add class_names attribute for compatibility
-        dataset.class_names = dataset.classes
-        
-        return dataset
+        try:
+            # Load dataset using ImageFolder
+            dataset = datasets.ImageFolder(
+                root=str(dataset_path),
+                transform=transform
+            )
+            
+            print(f"Loaded custom dataset from {dataset_path}: {len(dataset)} images, {len(dataset.classes)} classes")
+            
+            # Add class_names attribute for compatibility
+            dataset.class_names = dataset.classes
+            
+            return dataset
+        except Exception as e:
+            print(f"Error loading dataset from {dataset_path}: {str(e)}")
+            # Implement a fallback custom dataset directly here
+            try:
+                # Create a custom dataset class inline
+                class FallbackCustomDataset(Dataset):
+                    def __init__(self, root_dir, transform=None):
+                        self.root_dir = Path(root_dir)
+                        self.transform = transform
+                        self.classes = sorted([d for d in os.listdir(self.root_dir) if os.path.isdir(os.path.join(self.root_dir, d))])
+                        self.class_to_idx = {cls: idx for idx, cls in enumerate(self.classes)}
+                        
+                        self.samples = []
+                        self.labels = []
+                        self.targets = []  # Add targets for compatibility with ImageFolder
+                        
+                        for class_name in self.classes:
+                            class_dir = self.root_dir / class_name
+                            class_idx = self.class_to_idx[class_name]
+                            
+                            for img_name in os.listdir(class_dir):
+                                if img_name.lower().endswith(('.png', '.jpg', '.jpeg')):
+                                    img_path = class_dir / img_name
+                                    # Store absolute path to avoid path resolution issues
+                                    self.samples.append(str(img_path.absolute()))
+                                    self.labels.append(class_idx)
+                                    self.targets.append(class_idx)  # Store targets same as labels
+                
+                    def __len__(self):
+                        return len(self.samples)
+                
+                    def __getitem__(self, idx):
+                        img_path = self.samples[idx]
+                        try:
+                            image = Image.open(img_path).convert('RGB')
+                        except Exception as e:
+                            print(f"Error opening image {img_path}: {e}")
+                            # Return a blank image as fallback
+                            image = Image.new('RGB', (224, 224), color='gray')
+                        
+                        label = self.labels[idx]
+                        
+                        if self.transform:
+                            image = self.transform(image)
+                        
+                        return image, label
+                
+                # Use our fallback implementation
+                dataset = FallbackCustomDataset(
+                    root_dir=dataset_path,
+                    transform=transform
+                )
+                print(f"Loaded dataset with FallbackCustomDataset from {dataset_path}: {len(dataset)} images")
+                # Add class_names attribute for compatibility
+                dataset.class_names = dataset.classes
+                return dataset
+            except Exception as ce:
+                print(f"Error loading with FallbackCustomDataset: {str(ce)}")
+                # Re-raise original error if custom loader also fails
+                raise e
     
     def evaluate(self, 
                  data_loader: torch.utils.data.DataLoader,
@@ -174,6 +288,10 @@ class MINDS:
         # Get model names
         model_names = list(self.models.keys())
         
+        # Try using GPU first, with fallback to CPU if memory issues occur
+        original_device = self.device
+        memory_error_occurred = False
+        
         # Iterate through tasks
         task_counter = 0
         for task_data in data_loader:
@@ -189,28 +307,65 @@ class MINDS:
             # Extract task data
             support_images, support_labels, query_images, query_labels, _ = task_data
             
-            # Move data to device
-            support_images = support_images.to(self.device)
-            support_labels = support_labels.to(self.device)
-            query_images = query_images.to(self.device)
-            query_labels = query_labels.to(self.device)
+            # Handle memory errors and device transfer
+            try:
+                if memory_error_occurred and self.use_cpu_fallback:
+                    # Already had memory error, use CPU
+                    current_device = torch.device('cpu')
+                else:
+                    current_device = self.device
+                    
+                # Move data to device with proper error handling
+                support_images = support_images.to(current_device)
+                support_labels = support_labels.to(current_device)
+                query_images = query_images.to(current_device)
+                query_labels = query_labels.to(current_device)
+            except RuntimeError as e:
+                if "CUDA out of memory" in str(e) and self.use_cpu_fallback:
+                    print("\nCUDA out of memory error. Switching to CPU...")
+                    memory_error_occurred = True
+                    current_device = torch.device('cpu')
+                    
+                    # Try again with CPU
+                    support_images = support_images.to(current_device)
+                    support_labels = support_labels.to(current_device)
+                    query_images = query_images.to(current_device)
+                    query_labels = query_labels.to(current_device)
+                    
+                    # Also move models to CPU
+                    for model_name in model_names:
+                        self.models[model_name] = self.models[model_name].to(current_device)
+                else:
+                    raise  # Re-raise if not an out of memory error or if fallback is disabled
             
             # Evaluate each model on this task
             for model_name in model_names:
                 model = self.models[model_name]
+                # Ensure model is on the same device as data
+                if next(model.parameters()).device != current_device:
+                    model = model.to(current_device)
                 
-                # Measure inference time
-                start_time = torch.cuda.Event(enable_timing=True)
-                end_time = torch.cuda.Event(enable_timing=True)
-                
-                start_time.record()
-                with torch.no_grad():
-                    # Get model predictions
-                    predictions = model(support_images, support_labels, query_images)
+                # Measure inference time - handle different devices
+                if current_device.type == 'cuda':
+                    start_time = torch.cuda.Event(enable_timing=True)
+                    end_time = torch.cuda.Event(enable_timing=True)
                     
-                end_time.record()
-                torch.cuda.synchronize()
-                inference_time = start_time.elapsed_time(end_time) / 1000.0  # Convert to seconds
+                    start_time.record()
+                    with torch.no_grad():
+                        # Get model predictions
+                        predictions = model(support_images, support_labels, query_images)
+                        
+                    end_time.record()
+                    torch.cuda.synchronize()
+                    inference_time = start_time.elapsed_time(end_time) / 1000.0  # Convert to seconds
+                else:
+                    # For CPU, use simple time measurement
+                    import time
+                    start_time = time.time()
+                    with torch.no_grad():
+                        # Get model predictions
+                        predictions = model(support_images, support_labels, query_images)
+                    inference_time = time.time() - start_time
                 
                 # Convert predictions and labels to numpy arrays
                 predictions_np = predictions.cpu().numpy()

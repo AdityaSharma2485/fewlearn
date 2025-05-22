@@ -15,11 +15,16 @@ import shutil
 import time
 import random
 
-# Import from restructured fewlearn module
-from fewlearn.core.minds import MINDS
-from fewlearn.models.prototypical import PrototypicalNetworks
-from fewlearn.evaluation.evaluator import Evaluator
-from fewlearn.visualization import plot_support_query_sets
+# Import from local package
+import sys
+import os
+# Add the parent directory to sys.path to make local imports work
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from core.minds import MINDS
+from models.prototypical import PrototypicalNetworks
+from evaluation.evaluator import Evaluator
+from visualization import plot_support_query_sets
 
 # Add torch multiprocessing for proper parallelization
 import torch.multiprocessing as mp
@@ -1129,3 +1134,12 @@ elif selected_page == "Omniglot Dataset":
     omniglot_dataset()
 elif selected_page == "Custom Dataset":
     custom_dataset()
+
+def main():
+    """Entry point for the demo app when installed as a package."""
+    # This function is intentionally left empty as Streamlit's CLI will handle
+    # the script execution - this is just a hook for the entry point
+    pass
+
+if __name__ == "__main__":
+    main()

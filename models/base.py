@@ -7,7 +7,7 @@ from torch import nn
 import torch.nn.functional as F
 from typing import Union, Optional, Dict, Any
 
-from fewlearn.backbones.registry import get_backbone
+from backbones.registry import get_backbone
 
 
 class FewShotModel(nn.Module):

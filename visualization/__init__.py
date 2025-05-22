@@ -5,7 +5,7 @@ This package contains utilities for visualizing the results
 of few-shot learning evaluations.
 """
 
-from fewlearn.visualization.plotting import (
+from visualization.plotting import (
     plot_prototype_embeddings,
     plot_confusion_matrix,
     plot_performance_comparison,
