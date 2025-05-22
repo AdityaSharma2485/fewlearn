@@ -15,16 +15,14 @@ import shutil
 import time
 import random
 
-# Import from local package
+# Import from the package
 import sys
 import os
-# Add the parent directory to sys.path to make local imports work
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.minds import MINDS
-from models.prototypical import PrototypicalNetworks
-from evaluation.evaluator import Evaluator
-from visualization import plot_support_query_sets
+from fewlearn.core.minds import MINDS
+from fewlearn.models.prototypical import PrototypicalNetworks
+from fewlearn.evaluation.evaluator import Evaluator
+from fewlearn.visualization import plot_support_query_sets
 
 # Add torch multiprocessing for proper parallelization
 import torch.multiprocessing as mp
