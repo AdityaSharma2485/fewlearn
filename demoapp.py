@@ -38,21 +38,30 @@ st.markdown("<h1 style='text-align: center; font-size: 5em; margin-bottom: 0.1em
 st.markdown("<h2 style='text-align: center; font-size: 2.5em; margin-top: -20px;'>Minimal Instance Neural Data System</h2>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #7f8c8d; font-style: italic;'>Few-Shot Learning Evaluation Framework</p>", unsafe_allow_html=True)
 
-# CSS for layout, button styling, and spacing adjustments
+# CSS for layout, button styling, spacing, and theme compatibility
 st.markdown("""
     <style>
-    /* General background and text color for the app */
-    .stApp {
+    /* General styling and theme adaptation */
+    html[data-theme="light"] .stApp {
         background-color: #f8f9fa;
         color: #333333;
+    }
+    html[data-theme="dark"] .stApp {
+        background-color: #0e1117;
+        color: #e0e0e0;
+    }
+    .stApp {
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-    
-    /* Improve sidebar appearance */
-    .css-1d391kg {
+
+    /* Sidebar background */
+    html[data-theme="light"] .css-1d391kg {
         background-color: #e8eef2;
     }
-    
+    html[data-theme="dark"] .css-1d391kg {
+        background-color: #2b2b2b;
+    }
+
     /* Style buttons */
     .stButton button {
         background-color: #e74c3c;
@@ -62,26 +71,36 @@ st.markdown("""
         padding: 0.5rem 1rem;
         transition: all 0.3s;
     }
-    
     .stButton button:hover {
         background-color: #c0392b;
         box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }
-    
+
     /* Style headers */
     h3 {
         color: #2c3e50;
         border-bottom: 1px solid #eee;
         padding-bottom: 10px;
     }
-    
+
     /* Style metrics display */
-    .metric-container {
+    html[data-theme="light"] .metric-container {
         background-color: #f1f8fe;
+        border-left: 3px solid #e74c3c;
+    }
+    html[data-theme="dark"] .metric-container {
+        background-color: #2d2d2d;
+        border-left: 3px solid #e74c3c;
+    }
+    .metric-container {
         border-radius: 5px;
         padding: 10px;
         margin: 5px 0;
-        border-left: 3px solid #e74c3c;
+    }
+
+    /* Checkbox spacing */
+    .stCheckbox {
+        margin-bottom: 0.75rem;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -126,20 +145,23 @@ def load_backbones():
     """Load and cache model backbones with proper error handling."""
     try:
         available_backbones = {
-            "GoogleNet": models.googlenet(weights="DEFAULT"),
-            "ResNet18": models.resnet18(weights="DEFAULT"),
-            "InceptionV3": models.inception_v3(weights="DEFAULT"),
-            "MobileNetV2": models.mobilenet_v2(weights="DEFAULT"),
-            "DenseNet121": models.densenet121(weights="DEFAULT"),
+            # Keep only the 5 smallest and most efficient models
+            "SqueezeNet1_1": models.squeezenet1_1(weights="DEFAULT"),      # ~1.2M params
+            "ShuffleNetV2_x0_5": models.shufflenet_v2_x0_5(weights="DEFAULT"),  # ~1.4M params
+            "MNASNet0_5": models.mnasnet0_5(weights="DEFAULT"),           # ~2.2M params
+            "MobileNetV3_Small": models.mobilenet_v3_small(weights="DEFAULT"),  # ~2.5M params
+            "MobileNetV2": models.mobilenet_v2(weights="DEFAULT"),        # ~3.5M params
         }
         
         # Modify the fully connected layer to output features
         for name, model in available_backbones.items():
             model.eval()  # Set to evaluation mode
             with torch.no_grad():  # Disable gradient computation
-                if name == "InceptionV3":
-                    model.fc = nn.Flatten()
-                    model.aux_logits = False  # Disable auxiliary outputs
+                if name == "SqueezeNet1_1":
+                    # SqueezeNet uses classifier instead of fc
+                    model.classifier = nn.Flatten()
+                elif name in ["ShuffleNetV2_x0_5", "MNASNet0_5", "MobileNetV3_Small", "MobileNetV2"]:
+                    model.classifier = nn.Flatten()
                 elif hasattr(model, 'fc'):
                     model.fc = nn.Flatten()
                 elif hasattr(model, 'classifier'):
@@ -156,6 +178,15 @@ def load_backbones():
     except Exception as e:
         st.error(f"Error loading model backbones: {str(e)}")
         return {}  # Return empty dict instead of None to prevent further errors
+
+# Model details for tooltips next to model checkboxes
+model_info = {
+    "SqueezeNet1_1": "Trained on ImageNet. ~1.24M parameters. Input size: 224x224. SqueezeNet architecture (ICLR 2017).",
+    "ShuffleNetV2_x0_5": "Trained on ImageNet. ~1.4M parameters. Input size: 224x224. ShuffleNetV2 (CVPR 2018).",
+    "MNASNet0_5": "Trained on ImageNet. ~2.2M parameters. Input size: 224x224. MNASNet (mobile NAS).",
+    "MobileNetV3_Small": "Trained on ImageNet. ~2.5M parameters. Input size: 224x224. MobileNetV3 Small (Google).",
+    "MobileNetV2": "Trained on ImageNet. ~3.5M parameters. Input size: 224x224. MobileNetV2 (Google)."
+}
 
 # Helper function to update progress bars
 def update_progress(progress_bar, step):
@@ -405,7 +436,7 @@ def show_predictions():
                     # Display the image
                     img = query_images[idx].transpose(1, 2, 0)
                     img = (img - img.min()) / (img.max() - img.min() + 1e-8)  # Added epsilon to prevent division by zero
-                    st.image(img, caption=f"Sample {i + 1}", use_column_width=True)
+                    st.image(img, caption=f"Sample {i + 1}", use_container_width=True)
                     
                     # Show actual and predicted labels
                     label_idx = int(actual_labels[idx])
@@ -451,15 +482,17 @@ def omniglot_dataset():
     # Select models to evaluate
     available_backbones = load_backbones()
     st.sidebar.subheader("Select Models to Evaluate")
+    st.sidebar.markdown("<br>", unsafe_allow_html=True)
     selected_models = {}
     for model_name in available_backbones.keys():
-        if st.sidebar.checkbox(model_name, value=(model_name == "ResNet18")):
+        help_text = model_info.get(model_name, "")
+        if st.sidebar.checkbox(model_name, value=(model_name == "SqueezeNet1_1"), help=help_text):
             selected_models[model_name] = available_backbones[model_name]
     
     # Initialize with selected models or at least one model if none selected
     if not selected_models:
-        selected_models = {"ResNet18": available_backbones["ResNet18"]}
-        st.sidebar.warning("At least one model must be selected. Using ResNet18 by default.")
+        selected_models = {"SqueezeNet1_1": available_backbones["SqueezeNet1_1"]}
+        st.sidebar.warning("At least one model must be selected. Using SqueezeNet1_1 by default.")
     
     # Initialize MINDS class and add the selected models
     meta_eval = MINDS()
@@ -583,13 +616,14 @@ def omniglot_dataset():
             selected_model_names = list(meta_eval.models.keys())
             status_text.text(f"Evaluating {len(selected_model_names)} models: {', '.join(selected_model_names)}")
             
-            # Start timing
+            # Start timing with high-resolution timers
             if torch.cuda.is_available():
+                torch.cuda.synchronize()
                 start_event = torch.cuda.Event(enable_timing=True)
                 end_event = torch.cuda.Event(enable_timing=True)
                 start_event.record()
             else:
-                start_time = time.time()
+                start_time = time.perf_counter()
             
             # Evaluate all models in one call - MINDS.evaluate internally handles all models
             # The evaluate method returns a tuple of (metrics, inference_times)
@@ -600,19 +634,22 @@ def omniglot_dataset():
                 webview_bar=progress_bar
             )
             
-            # End timing
+            # End timing and compute total evaluation time
             if torch.cuda.is_available():
                 end_event.record()
                 torch.cuda.synchronize()
-                total_time = start_event.elapsed_time(end_event) / 1000  # Convert ms to seconds
+                total_eval_time = start_event.elapsed_time(end_event) / 1000  # Convert ms to seconds
             else:
-                total_time = time.time() - start_time
+                total_eval_time = time.perf_counter() - start_time
             
             if not all_metrics:
                 raise ValueError("No evaluation results returned")
             
             progress_bar.progress(100)
-            status_text.text("Evaluation Complete!")
+            # Display evaluation complete message with duration
+            mins = int(total_eval_time // 60)
+            secs = int(total_eval_time % 60)
+            status_text.text(f"Evaluation complete in {mins} min {secs} secs!")
             
             # Find the best model based on accuracy
             best_model = max(all_metrics.items(), key=lambda x: x[1]['accuracy'])
@@ -637,12 +674,14 @@ def omniglot_dataset():
                     with cols[1]:
                         st.metric("F1 Score", f"{metrics['f1']:.4f}")
                     with cols[2]:
-                        total_time = all_inference[model_name]
+                        # all_inference gives average inference time per task
+                        avg_time = all_inference[model_name]
+                        total_time = avg_time * N_EVALUATION_TASKS
                         st.metric("Total Time", f"{total_time:.3f}s")
                     
-                    # Calculate per-task timing
-                    avg_time = total_time / N_EVALUATION_TASKS
-                    tasks_per_second = N_EVALUATION_TASKS / total_time if total_time > 0 else 0
+                    # Calculate per-task timing and throughput
+                    # avg_time already is average time per task
+                    tasks_per_second = 1.0 / avg_time if avg_time > 0 else 0
                     
                     # Format time with appropriate units
                     if avg_time < 0.001:
@@ -651,7 +690,6 @@ def omniglot_dataset():
                         time_str = f"{avg_time * 1e3:.2f}ms"
                     else:
                         time_str = f"{avg_time:.3f}s"
-                    
                     st.markdown(f"*Average time per task: {time_str}*")
                     st.markdown(f"*Processing speed: {tasks_per_second:.1f} tasks/s*")
                     st.markdown("---")
@@ -713,22 +751,8 @@ def custom_dataset():
     # Display the folder structure chart
     st.write("### Expected Dataset Structure")
     st.markdown("""
-    Please prepare your dataset in one of these two formats:
-    
-    1. **Direct folder structure:**
-    ```
-    dataset_folder/
-    ├── class1/
-    │   ├── image1.jpg
-    │   ├── image2.jpg
-    │   └── ...
-    ├── class2/
-    │   ├── image1.jpg
-    │   └── ...
-    └── ...
-    ```
-    
-    2. **Zipped folder structure:**
+    Please prepare your dataset in the following zipped folder structure:
+
     ```
     dataset.zip
     └── dataset_folder/      # Main folder containing class folders
@@ -740,7 +764,7 @@ def custom_dataset():
         │   └── ...
         └── ...
     ```
-    
+
     **Note:** 
     - Each class should have its own folder containing image files
     - Supported image formats: .jpg, .jpeg, .png
@@ -765,15 +789,17 @@ def custom_dataset():
     # Select models to evaluate
     available_backbones = load_backbones()
     st.sidebar.subheader("Select Models to Evaluate")
+    st.sidebar.markdown("<br>", unsafe_allow_html=True)
     selected_models = {}
     for model_name in available_backbones.keys():
-        if st.sidebar.checkbox(model_name, value=(model_name == "MobileNetV2")):
+        help_text = model_info.get(model_name, "")
+        if st.sidebar.checkbox(model_name, value=(model_name == "SqueezeNet1_1"), help=help_text):
             selected_models[model_name] = available_backbones[model_name]
     
     # Initialize with selected models or at least one model if none selected
     if not selected_models:
-        selected_models = {"MobileNetV2": available_backbones["MobileNetV2"]}
-        st.sidebar.warning("At least one model must be selected. Using MobileNetV2 by default.")
+        selected_models = {"SqueezeNet1_1": available_backbones["SqueezeNet1_1"]}
+        st.sidebar.warning("At least one model must be selected. Using SqueezeNet1_1 by default.")
     
     # Initialize MINDS class and add the selected models
     meta_eval = MINDS()
@@ -953,13 +979,14 @@ def custom_dataset():
             selected_model_names = list(meta_eval.models.keys())
             status_text.text(f"Evaluating {len(selected_model_names)} models: {', '.join(selected_model_names)}")
             
-            # Start timing
+            # Start timing with high-resolution timers
             if torch.cuda.is_available():
+                torch.cuda.synchronize()
                 start_event = torch.cuda.Event(enable_timing=True)
                 end_event = torch.cuda.Event(enable_timing=True)
                 start_event.record()
             else:
-                start_time = time.time()
+                start_time = time.perf_counter()
             
             # Evaluate all models in one call - MINDS.evaluate internally handles all models
             # The evaluate method returns a tuple of (metrics, inference_times)
@@ -970,19 +997,22 @@ def custom_dataset():
                 webview_bar=progress_bar
             )
             
-            # End timing
+            # End timing and compute total evaluation time
             if torch.cuda.is_available():
                 end_event.record()
                 torch.cuda.synchronize()
-                total_time = start_event.elapsed_time(end_event) / 1000  # Convert ms to seconds
+                total_eval_time = start_event.elapsed_time(end_event) / 1000  # Convert ms to seconds
             else:
-                total_time = time.time() - start_time
+                total_eval_time = time.perf_counter() - start_time
             
             if not all_metrics:
                 raise ValueError("No evaluation results returned")
             
             progress_bar.progress(100)
-            status_text.text("Evaluation Complete!")
+            # Display evaluation complete message with duration
+            mins = int(total_eval_time // 60)
+            secs = int(total_eval_time % 60)
+            status_text.text(f"Evaluation complete in {mins} min {secs} secs!")
             
             # Find the best model based on accuracy
             best_model = max(all_metrics.items(), key=lambda x: x[1]['accuracy'])
@@ -1007,12 +1037,14 @@ def custom_dataset():
                     with cols[1]:
                         st.metric("F1 Score", f"{metrics['f1']:.4f}")
                     with cols[2]:
-                        total_time = all_inference[model_name]
+                        # all_inference gives average inference time per task
+                        avg_time = all_inference[model_name]
+                        total_time = avg_time * N_EVALUATION_TASKS
                         st.metric("Total Time", f"{total_time:.3f}s")
                     
-                    # Calculate per-task timing
-                    avg_time = total_time / N_EVALUATION_TASKS
-                    tasks_per_second = N_EVALUATION_TASKS / total_time if total_time > 0 else 0
+                    # Calculate per-task timing and throughput
+                    # avg_time already is average time per task
+                    tasks_per_second = 1.0 / avg_time if avg_time > 0 else 0
                     
                     # Format time with appropriate units
                     if avg_time < 0.001:
@@ -1021,7 +1053,6 @@ def custom_dataset():
                         time_str = f"{avg_time * 1e3:.2f}ms"
                     else:
                         time_str = f"{avg_time:.3f}s"
-                    
                     st.markdown(f"*Average time per task: {time_str}*")
                     st.markdown(f"*Processing speed: {tasks_per_second:.1f} tasks/s*")
                     st.markdown("---")
