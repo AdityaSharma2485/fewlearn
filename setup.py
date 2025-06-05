@@ -8,7 +8,7 @@ with open(os.path.join(this_directory, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name="fewlearn",
-    version="0.1.0",
+    version="0.1.2",
     author="Aditya Sharma",
     author_email="adityasharma.2485@gmail.com",
     description="A Python module for few-shot learning with pretrained models",

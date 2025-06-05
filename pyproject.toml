@@ -17,9 +17,6 @@ classifiers = [
 ]
 dynamic = ["version"]
 
-[tool.setuptools]
-packages = ["fewlearn"]
-
 [project.urls]
 "Homepage" = "https://github.com/AdityaSharma2485/fewlearn"
 "Bug Tracker" = "https://github.com/AdityaSharma2485/fewlearn/issues" 

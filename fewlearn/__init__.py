@@ -5,7 +5,7 @@ FewLearn provides tools for comparing and evaluating pretrained models
 using few-shot learning techniques like Prototypical Networks.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 # Use lazy imports to avoid circular import issues
 # This allows users to do "from fewlearn import MINDS" etc.
