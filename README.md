@@ -48,6 +48,7 @@ minds.add_model("efficientnet_b0", PrototypicalNetworks(backbone="efficientnet_b
 # 3. Prepare dataset
 transform = transforms.Compose([
     transforms.Resize((84, 84)),
+    transforms.Grayscale(num_output_channels=3),  # Convert grayscale to RGB for ImageNet normalization
     transforms.ToTensor(),
     transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
 ])
@@ -55,7 +56,7 @@ transform = transforms.Compose([
 dataset = Omniglot(root='./data', download=True, transform=transform)
 
 # 4. Create an evaluation protocol
-protocol = EpisodicProtocol(n_way=5, n_shot=1, n_query=15, episodes=100)
+protocol = EpisodicProtocol(n_way=5, n_shot=5,n_query=15, episodes=100)
 
 # 5. Create an evaluator
 evaluator = Evaluator(
